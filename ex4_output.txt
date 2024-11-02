@@ -1,0 +1,26 @@
+(base) damianobaschiera@MacBook-Pro-di-Damiano MMD-Ex-2 %  cd /Users/damianobaschiera/Python/MMD/MMD-Ex-2 ; /usr/bin/env /Users/damianobaschiera/mi
+niconda3/bin/python /Users/damianobaschiera/.vscode/extensions/ms-python.debugpy-2024.12.0-darwin-x64/bundled/libs/debugpy/adapter/../../debugpy/la
+uncher 58977 -- /Users/damianobaschiera/Python/MMD/MMD-Ex-2/polynomial_sdg.py 
+Testing polynomial 1 with Nx=2, Ny=4, Nz=6, t=12
+Epoch 0: Loss = 0.7584023475646973
+Epoch 10: Loss = 0.13834021985530853
+Epoch 20: Loss = 0.06307649612426758
+Epoch 30: Loss = 0.045040059834718704
+Epoch 40: Loss = 0.03531941398978233
+Epoch 50: Loss = 0.02839837782084942
+Epoch 60: Loss = 0.023216011002659798
+Epoch 70: Loss = 0.019286267459392548
+Epoch 80: Loss = 0.016281045973300934
+Epoch 90: Loss = 0.013961520977318287
+
+Testing polynomial 2 with Nx=3, Ny=1, Nz=2, t=5
+Epoch 0: Loss = 0.08509085327386856
+Epoch 10: Loss = 0.05928207188844681
+Epoch 20: Loss = 0.04787690192461014
+Epoch 30: Loss = 0.04120158031582832
+Epoch 40: Loss = 0.03640873357653618
+Epoch 50: Loss = 0.0326019786298275
+Epoch 60: Loss = 0.02945231832563877
+Epoch 70: Loss = 0.026803946122527122
+Epoch 80: Loss = 0.024560702964663506
+Epoch 90: Loss = 0.022651895880699158
