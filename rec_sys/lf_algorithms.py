@@ -4,11 +4,72 @@
 # Limit size of GPU memory pre-allocated by jax
 import os
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
-
+import numpy as np
 import dataclasses
 import jax
 import jax.numpy as jnp
 import tensorflow_datasets as tfds
+def uv_factorization_vec_no_reg(mat_u, mat_v, train_ds, valid_ds, config):
+    """ Matrix factorization using SGD without regularization
+        Fast vectorized implementation using JAX
+    """
+
+    @jax.jit  # Comment out for single-step debugging
+    def update_uv(mat_u, mat_v, record, lr):
+        loss_value, grad = jax.value_and_grad(mse_loss_one_batch, argnums=[0, 1])(mat_u, mat_v, record)
+        mat_u = mat_u - lr * grad[0]
+        mat_v = mat_v - lr * grad[1]
+        return mat_u, mat_v, loss_value
+
+    for epoch in range(config.num_epochs):
+        lr = config.fixed_learning_rate if config.fixed_learning_rate is not None \
+            else config.dyn_lr_initial * (config.dyn_lr_decay_rate ** (epoch / config.dyn_lr_steps))
+        print(f"In uv_factorization_vec_no_reg, starting epoch {epoch} with lr={lr:.6f}")
+        train_loss = []
+        for record in tfds.as_numpy(train_ds.batch(config.batch_size_training)):
+            mat_u, mat_v, loss = update_uv(mat_u, mat_v, record, lr)
+            train_loss.append(loss)
+
+        train_loss_mean = jnp.mean(jnp.array(train_loss))
+        # Compute loss on the validation set
+        valid_loss = mse_loss_all_batches(mat_u, mat_v, valid_ds, config.batch_size_predict_with_mse)
+        valid_loss_mean = jnp.mean(jnp.array(valid_loss))
+        print(
+            f"Epoch {epoch} finished, ave training loss: {train_loss_mean:.6f}, ave validation loss: {valid_loss_mean:.6f}")
+    return mat_u, mat_v
+
+
+# Ex 3.a: Implement the function uv_factorizaion_reg
+def uv_factorization_reg(mat_u, mat_v, train_ds, valid_ds, config, reg_param): 
+    """ Matrix factorization using SGD with regularization
+        Fast vectorized implementation using JAX
+    """
+
+    @jax.jit  # Comment out for single-step debugging
+    def update_uv(mat_u, mat_v, record, lr, reg_param):
+        loss_value, grad = jax.value_and_grad(mse_loss_one_batch, argnums=[0, 1])(mat_u, mat_v, record)
+        mat_u = mat_u - lr * (grad[0])
+        mat_v = mat_v - lr * (grad[1])
+        loss_value += reg_param * jnp.sum(jnp.square(mat_u)) + reg_param * jnp.sum(jnp.square(mat_v))
+        return mat_u, mat_v, loss_value
+
+    for epoch in range(config.num_epochs):
+        lr = config.fixed_learning_rate if config.fixed_learning_rate is not None \
+            else config.dyn_lr_initial * (config.dyn_lr_decay_rate ** (epoch / config.dyn_lr_steps))
+        print(f"In uv_factorization_reg, starting epoch {epoch} with lr={lr:.6f}")
+        train_loss = []
+        for record in tfds.as_numpy(train_ds.batch(config.batch_size_training)):
+            mat_u, mat_v, loss = update_uv(mat_u, mat_v, record, lr, config.reg_param)
+            train_loss.append(loss)
+
+        train_loss_mean = jnp.mean(jnp.array(train_loss))
+        # Compute loss on the validation set
+        valid_loss = mse_loss_all_batches(mat_u, mat_v, valid_ds, config.batch_size_predict_with_mse)
+        valid_loss_mean = jnp.mean(jnp.array(valid_loss))
+        print(
+            f"Epoch {epoch} finished, ave training loss: {train_loss_mean:.6f}, ave validation loss: {valid_loss_mean:.6f}")
+    return mat_u, mat_v, valid_loss_mean
+
 
 
 def init_latent_factors(num_users, num_items, num_factors, rng_key):
@@ -132,42 +193,21 @@ def uv_factorization_tf_slow(mat_u, mat_v, train_ds, config):
     return mat_u, mat_v
 
 
-def uv_factorization_vec_no_reg(mat_u, mat_v, train_ds, valid_ds, config):
-    """ Matrix factorization using SGD without regularization
-        Fast vectorized implementation using JAX
-    """
-
-    @jax.jit  # Comment out for single-step debugging
-    def update_uv(mat_u, mat_v, record, lr):
-        loss_value, grad = jax.value_and_grad(mse_loss_one_batch, argnums=[0, 1])(mat_u, mat_v, record)
-        mat_u = mat_u - lr * grad[0]
-        mat_v = mat_v - lr * grad[1]
-        return mat_u, mat_v, loss_value
-
-    for epoch in range(config.num_epochs):
-        lr = config.fixed_learning_rate if config.fixed_learning_rate is not None \
-            else config.dyn_lr_initial * (config.dyn_lr_decay_rate ** (epoch / config.dyn_lr_steps))
-        print(f"In uv_factorization_vec_no_reg, starting epoch {epoch} with lr={lr:.6f}")
-        train_loss = []
-        for record in tfds.as_numpy(train_ds.batch(config.batch_size_training)):
-            mat_u, mat_v, loss = update_uv(mat_u, mat_v, record, lr)
-            train_loss.append(loss)
-
-        train_loss_mean = jnp.mean(jnp.array(train_loss))
-        # Compute loss on the validation set
-        valid_loss = mse_loss_all_batches(mat_u, mat_v, valid_ds, config.batch_size_predict_with_mse)
-        valid_loss_mean = jnp.mean(jnp.array(valid_loss))
-        print(
-            f"Epoch {epoch} finished, ave training loss: {train_loss_mean:.6f}, ave validation loss: {valid_loss_mean:.6f}")
-    return mat_u, mat_v
-
-
 @dataclasses.dataclass
 class Flags:
     evaluate_uv_factorization_dense_um = False
     evaluate_uv_factorization_tf_slow = False
-    evaluate_uv_factorization_vec_no_reg = True
-
+    evaluate_uv_factorization_vec_no_reg = False
+    evaluate_uv_factorization_vec_reg = False   # Ex 3.a: Set to True to evaluate uv_factorization_reg
+    
+def show_metrics_and_examples(message, matrix_u, matrix_v):
+            print(message)
+            mse_all_batches = mse_loss_all_batches(matrix_u, matrix_v, test_ds, config.batch_size_predict_with_mse)
+            print("MSE examples from predict_with_mse on test_ds")
+            print(mse_all_batches[:config.num_predictions_to_show])
+            print("Prediction examples (pred, target)")
+            predictions_and_targets = predict_and_compare(matrix_u, matrix_v, test_ds, config)
+            print(predictions_and_targets[:config.num_predictions_to_show])
 
 # Test the functions
 if __name__ == '__main__':
@@ -226,3 +266,81 @@ if __name__ == '__main__':
         matrix_u, matrix_v = uv_factorization_vec_no_reg(matrix_u, matrix_v, train_ds, valid_ds, config)
 
         show_metrics_and_examples("====== After optimization =====", matrix_u, matrix_v)
+
+    if Flags.evaluate_uv_factorization_vec_reg:
+        ratings_tf, matrix_u, matrix_v, num_users, num_items = load_data_and_init_factors(config)
+        train_ds, valid_ds, test_ds = data.split_train_valid_test_tf(ratings_tf, config)
+
+
+        def show_metrics_and_examples(message, matrix_u, matrix_v):
+            print(message)
+            mse_all_batches = mse_loss_all_batches(matrix_u, matrix_v, test_ds, config.batch_size_predict_with_mse)
+            print("MSE examples from predict_with_mse on test_ds")
+            print(mse_all_batches[:config.num_predictions_to_show])
+            print("Prediction examples (pred, target)")
+            predictions_and_targets = predict_and_compare(matrix_u, matrix_v, test_ds, config)
+            print(predictions_and_targets[:config.num_predictions_to_show])
+
+
+        show_metrics_and_examples("====== Before optimization =====", matrix_u, matrix_v)
+
+        # Optimize the factors fast
+        matrix_u, matrix_v,_ = uv_factorization_reg(matrix_u, matrix_v, train_ds, valid_ds, config, config.reg_param)
+
+        show_metrics_and_examples("====== After optimization =====", matrix_u, matrix_v)
+
+# Ex 3.b: Implement a grid search for the hyperparameters fixed_learning_rate and reg_param
+# Define search grid for fixed_learning_rate and reg_param
+config.num_epochs = 2
+learning_rates = np.linspace(0.001, 0.1, 5)
+regularization_params = np.linspace(0.01, 1.0, 5)
+
+# Load and preprocess data only once
+ratings_tf, matrix_u, matrix_v, num_users, num_items = load_data_and_init_factors(config)
+train_ds, valid_ds, test_ds = data.split_train_valid_test_tf(ratings_tf, config)
+
+# Store best hyperparameter combination and lowest validation loss
+best_hyperparams = {}
+lowest_val_loss = float('inf')
+
+for lr in learning_rates:
+    for reg in regularization_params:
+        print(f"Testing with learning rate = {lr}, regularization = {reg}")
+
+        # Initialize matrices for each experiment
+        matrix_u_exp, matrix_v_exp = matrix_u.copy(), matrix_v.copy()
+
+        # Set config values for this run
+        config.fixed_learning_rate = lr
+        config.reg_param = reg
+
+        # Run the regularized factorization
+        matrix_u_exp, matrix_v_exp, val_loss = uv_factorization_reg(matrix_u_exp, matrix_v_exp, train_ds, valid_ds, config, reg)
+
+        # Calculate validation loss
+        print(f"Validation loss = {val_loss}")
+
+        # Update if the current model is the best one found so far
+        if val_loss < lowest_val_loss:
+            lowest_val_loss = val_loss
+            best_hyperparams = {'fixed_learning_rate': lr, 'reg_param': reg}
+
+print(f"Best hyperparameters: {best_hyperparams}")
+print(f"Lowest validation loss: {lowest_val_loss}")
+
+# Run best model with full epochs for comparison
+config.num_epochs = 10  # Increase epochs for the final comparison
+config.fixed_learning_rate = best_hyperparams['fixed_learning_rate']
+config.reg_param = best_hyperparams['reg_param']
+
+print("\nComparing best regularized model against non-regularized version...")
+
+# Re-initialize for final comparison
+matrix_u_final, matrix_v_final = matrix_u.copy(), matrix_v.copy()
+matrix_u_final, matrix_v_final = uv_factorization_reg(matrix_u_final, matrix_v_final, train_ds, valid_ds, config, config.reg_param)
+show_metrics_and_examples("Regularized Model (Best Hyperparameters)", matrix_u_final, matrix_v_final)
+
+# Compare to non-regularized model
+matrix_u_nonreg, matrix_v_nonreg = matrix_u.copy(), matrix_v.copy()
+matrix_u_nonreg, matrix_v_nonreg = uv_factorization_vec_no_reg(matrix_u_nonreg, matrix_v_nonreg, train_ds, valid_ds, config)
+show_metrics_and_examples("Non-Regularized Model", matrix_u_nonreg, matrix_v_nonreg)

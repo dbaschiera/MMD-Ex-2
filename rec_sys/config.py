@@ -26,7 +26,7 @@ class ConfigLf:
     split_shuffle_seed = 22
 
     shuffle_files: bool = True
-    data_dir: str = '/scratch/core/artur/movielens/'
+    data_dir: str = 'movielens/'
 
     # Configurations for matrix factorization
     rng_seed: int = 42
@@ -39,7 +39,7 @@ class ConfigLf:
     dyn_lr_decay_rate: float = 0.99
     dyn_lr_steps: int = 2   # Number of epochs before decaying the learning rate
 
-    reg_param: float = 0.1
+    reg_param: float = 0.5
     batch_size_training: int = 128
 
     batch_size_predict_with_mse: int = 256
